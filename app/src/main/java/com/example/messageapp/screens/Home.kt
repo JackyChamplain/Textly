@@ -9,13 +9,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.messageapp.data.Contact
-import com.example.messageapp.data.ContactGroup
-import com.example.messageapp.data.ContactViewModel
-import com.example.messageapp.viewmodel.SettingsViewModel
+import com.example.messageapp.contact.ContactGroup
+import com.example.messageapp.contact.ContactViewModel
+import com.example.messageapp.utilities.SettingsViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon

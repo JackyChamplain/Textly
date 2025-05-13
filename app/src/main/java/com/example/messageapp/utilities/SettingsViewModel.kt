@@ -1,4 +1,4 @@
-package com.example.messageapp.viewmodel
+package com.example.messageapp.utilities
 
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.lifecycle.SavedStateHandle

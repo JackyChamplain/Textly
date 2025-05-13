@@ -10,12 +10,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.messageapp.data.Contact
-import com.example.messageapp.data.ContactGroup
-import com.example.messageapp.data.ContactViewModel
-import com.example.messageapp.viewmodel.SettingsViewModel
+import com.example.messageapp.contact.Contact
+import com.example.messageapp.contact.ContactGroup
+import com.example.messageapp.contact.ContactViewModel
+import com.example.messageapp.utilities.SettingsViewModel
 
 @Composable
 fun AddContact(
@@ -83,12 +82,31 @@ fun AddContact(
             // Save Contact Button
             Button(onClick = {
                 if (contactName.isNotBlank() && phoneNum.isNotBlank()) {
-                    contactViewModel.addContact(Contact(name = contactName, phoneNumber = phoneNum, group = selectedGroup))
-                    navController.navigate("home")
+                    val trimmedNumber = phoneNum.trim()
+                    val isValid = trimmedNumber.matches(Regex("^\\+?[0-9]{10,15}$"))
+
+                    if (isValid) {
+                        // Ensure number starts with "+"
+                        val normalizedNumber = if (trimmedNumber.startsWith("+")) trimmedNumber else "+$trimmedNumber"
+
+                        contactViewModel.addContact(
+                            Contact(
+                                name = contactName,
+                                phoneNumber = normalizedNumber,
+                                group = selectedGroup
+                            )
+                        )
+                        println("Phone number saved!")
+
+                        navController.navigate("home")
+                    } else {
+                        println("Invalid phone number format")
+                    }
                 }
             }) {
                 Text("Save Contact", fontSize = settingsViewModel.fontSize.value.sp)
             }
+
 
             // Cancel Button
             Button(onClick = { navController.navigate("home") }) {

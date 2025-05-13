@@ -1,7 +1,23 @@
 package com.example.messageapp
 
+import android.Manifest
+import android.content.Context
+import android.telephony.SmsManager
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.messageapp.utilities.Message
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -14,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -22,6 +37,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,8 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
-import com.example.messageapp.data.ContactViewModel
-import com.example.messageapp.viewmodel.SettingsViewModel
+import com.example.messageapp.contact.ContactViewModel
+import com.example.messageapp.utilities.SettingsViewModel
 import com.example.messageapp.screens.AddContact
 import com.example.messageapp.screens.Home
 import com.example.messageapp.screens.Settings
@@ -51,6 +67,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +124,7 @@ fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewMo
                     composable("settings") { Settings(navController = navController,settingsViewModel = settingsViewModel) }
                     composable("chat/{contactId}") { backStackEntry ->
                         val contactId = backStackEntry.arguments?.getString("contactId") ?: ""
-                        ChatScreen(contactId = contactId, navController = navController, contactViewModel = contactViewModel, settingsViewModel = settingsViewModel)
+                        ChatScreen(contactId = contactId, navController = navController, contactViewModel = contactViewModel)
                     }
                 }
             }
@@ -123,15 +140,43 @@ fun ChatScreen(
     contactId: String,
     navController: NavController,
     contactViewModel: ContactViewModel,
-    settingsViewModel: SettingsViewModel // Receive SettingsViewModel
 ) {
-    val contact = contactViewModel.contacts.find { it.id == contactId }
     var messageText by remember { mutableStateOf("") }
+    val context = LocalContext.current  // Correct usage of LocalContext
+    val contact = contactViewModel.contacts.find { it.id == contactId }
 
-    if (contact != null) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    // Launcher for requesting permission
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            Toast.makeText(context, "SMS permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        // Request permission to send SMS when the screen is displayed
+        launcher.launch(Manifest.permission.SEND_SMS)
+    }
+
+    // Handle sending SMS and adding the message
+    fun sendMessage() {
+        if (messageText.isNotBlank() && contact != null) {
+            // Send SMS if permission granted
+            try {
+                val smsManager = SmsManager.getDefault()
+                smsManager.sendTextMessage(contact.phoneNumber, null, messageText, null, null)
+                contactViewModel.addMessageToContact(context,contact.id, messageText) // Add to local contact messages list
+                messageText = "" // Reset message input field
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to send SMS", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // UI Layout
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (contact != null) {
             TopAppBar(
-                title = { Text("${contact.name} (${contact.phoneNumber})", fontSize = settingsViewModel.fontSize.value.sp) },
+                title = { Text("${contact.name} (${contact.phoneNumber})") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -142,7 +187,9 @@ fun ChatScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             LazyColumn(
-                modifier = Modifier.weight(1f).padding(8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp),
                 contentPadding = PaddingValues(8.dp)
             ) {
                 items(contact.messages) { message ->
@@ -150,48 +197,36 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(8.dp)
-                            .background(Color.LightGray)
-                            .combinedClickable(
-                                onClick = { /* Click to open if needed */ },
-                                onLongClick = { contactViewModel.deleteMessage(contact.id, message) } // Remove from ViewModel
-                            ),
+                            .background(Color.LightGray),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "You:",
+                            text = "You: ",
                             color = Color.Gray,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = settingsViewModel.fontSize.value.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
-                            text = message,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(8.dp),
-                            fontSize = settingsViewModel.fontSize.value.sp
+                            text = message.content,
+                            modifier = Modifier.weight(1f).padding(8.dp)
                         )
-                        IconButton(onClick = { contactViewModel.deleteMessage(contact.id, message) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Message")
-                        }
                     }
                 }
             }
 
             Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextField(
+                BasicTextField(
                     value = messageText,
                     onValueChange = { messageText = it },
-                    label = { Text("Type a message", fontSize = settingsViewModel.fontSize.value.sp) },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(fontSize = settingsViewModel.fontSize.value.sp)
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        imeAction = ImeAction.Send
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = { sendMessage() }
+                    ),
+                    modifier = Modifier.weight(1f)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = {
-                    if (messageText.isNotBlank()) {
-                        contactViewModel.addMessageToContact(contact.id, messageText)
-                        messageText = ""
-                    }
-                }) {
+                IconButton(onClick = { sendMessage() }) {
                     Icon(Icons.Default.Send, contentDescription = "Send")
                 }
             }
