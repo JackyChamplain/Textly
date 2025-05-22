@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.messageapp.contact.ContactGroup
 import com.example.messageapp.contact.ContactViewModel
 import com.example.messageapp.utilities.SettingsViewModel
 import androidx.compose.material.icons.Icons
@@ -23,22 +22,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import androidx.compose.material.icons.filled.Lock
-import com.example.messageapp.contact.Contact
+import com.example.messageapp.roomdb.Contact
+import com.example.messageapp.roomdb.ContactGroup
 
 @Composable
 fun Home(navController: NavController, contactViewModel: ContactViewModel, settingsViewModel: SettingsViewModel) {
     var selectedGroup by remember { mutableStateOf<ContactGroup?>(null) }
     val context = LocalContext.current
+    val contacts by contactViewModel.contacts.collectAsState(initial = emptyList())
 
     // Filtered contacts based on the selected group
-    val contactsToDisplay by remember {
+    val contactsToDisplay by remember(contacts, selectedGroup) {
         derivedStateOf {
             val filtered = if (selectedGroup == null) {
-                contactViewModel.contacts
+                contacts
             } else {
-                contactViewModel.contacts.filter { it.group == selectedGroup }
+                contacts.filter { it.group == selectedGroup }
             }
-            filtered.sortedWith(compareByDescending<com.example.messageapp.contact.Contact> { it.isPinned }.thenBy { it.name })
+            // Explicitly specify the type for the comparator
+            filtered.sortedWith(
+                compareByDescending<Contact> { it.isPinned }.thenBy { it.name }
+            )
         }
     }
 
@@ -53,9 +57,8 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
             "Contacts",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(16.dp),
-            fontSize = settingsViewModel.fontSize.floatValue.sp
+            fontSize = settingsViewModel.fontSize.value.sp
         )
-
         Spacer(modifier = Modifier.height(8.dp))
 
         // Group Filter Buttons
@@ -70,7 +73,6 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
             ) {
                 Text("Business")
             }
-
             // Personal button
             Button(
                 onClick = { selectedGroup = if (selectedGroup == ContactGroup.PERSONAL) null else ContactGroup.PERSONAL },
@@ -78,7 +80,6 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
             ) {
                 Text("Personal")
             }
-
             // Spam button
             Button(
                 onClick = { selectedGroup = if (selectedGroup == ContactGroup.SPAM) null else ContactGroup.SPAM },
@@ -87,7 +88,6 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                 Text("Spam")
             }
         }
-
         Spacer(modifier = Modifier.height(16.dp))
 
         // Contact list
@@ -100,10 +100,12 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                         .combinedClickable(
                             onClick = { navController.navigate("chat/${contact.id}") },
                             onLongClick = {
-                                contact.isPinned = !contact.isPinned
+                                // Create a new contact instance with updated pin status
+                                val updatedContact = contact.copy(isPinned = !contact.isPinned)
+                                contactViewModel.addContact(updatedContact) // This will replace due to REPLACE strategy
                                 Toast.makeText(
                                     context,
-                                    if (contact.isPinned) "Pinned chat with ${contact.name}" else "Unpinned chat",
+                                    if (updatedContact.isPinned) "Pinned chat with ${contact.name}" else "Unpinned chat",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -122,7 +124,7 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                             Text(
                                 text = "${contact.name} - ${contact.group}",
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontSize = settingsViewModel.fontSize.floatValue.sp,
+                                fontSize = settingsViewModel.fontSize.value.sp,
                                 fontWeight = if (contact.isPinned) FontWeight.Bold else FontWeight.Normal
                             )
                             if (contact.isPinned) {
@@ -130,16 +132,13 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                                 Text("📌") // Pinned chats/contacts marked with pin emoji
                             }
                         }
-
                         Spacer(modifier = Modifier.width(8.dp))
-
                         IconButton(onClick = {
                             // Show dialog or inline TextField
                             showPasswordDialog = contact // set the contact to lock
                         }) {
                             Icon(Icons.Default.Lock, contentDescription = "Set Password")
                         }
-
                         IconButton(onClick = { contactViewModel.removeContact(contact) }) {
                             Icon(Icons.Default.Delete, contentDescription = "Remove Contact")
                         }
@@ -147,14 +146,18 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                 }
             }
         }
+
         if (showPasswordDialog != null) {
             AlertDialog(
                 onDismissRequest = { showPasswordDialog = null },
                 confirmButton = {
                     TextButton(onClick = {
-                        showPasswordDialog?.let {
-                            it.password = newPassword
-                            it.hasPassword = true
+                        showPasswordDialog?.let { contact ->
+                            val updatedContact = contact.copy(
+                                password = newPassword,
+                                hasPassword = true
+                            )
+                            contactViewModel.addContact(updatedContact) // This will replace due to REPLACE strategy
                         }
                         newPassword = ""
                         showPasswordDialog = null
@@ -180,6 +183,5 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                 }
             )
         }
-
     }
 }

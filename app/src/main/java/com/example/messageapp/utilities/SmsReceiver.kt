@@ -3,100 +3,111 @@ package com.example.messageapp.utilities
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Telephony
 import android.telephony.SmsMessage
-import android.util.Log
-import android.widget.Toast
-import com.example.messageapp.contact.ContactViewModel
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.os.Build
+import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.example.messageapp.roomdb.AppDatabase
+import com.example.messageapp.roomdb.Message
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        try {
-            if (intent?.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION && context != null) {
-                val bundle = intent.extras ?: return
-                val pdus = bundle.get("pdus") as? Array<*> ?: return
-                val format = bundle.getString("format")
+        if (intent?.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION && context != null) {
+            val bundle = intent.extras ?: return
+            val pdus = bundle.get("pdus") as? Array<*> ?: return
+            val format = bundle.getString("format")
 
-                val messages = pdus.mapNotNull {
-                    SmsMessage.createFromPdu(it as ByteArray, format)
+            val messages = pdus.mapNotNull {
+                SmsMessage.createFromPdu(it as ByteArray, format)
+            }
+
+            val sender = messages.firstOrNull()?.displayOriginatingAddress ?: return
+            val messageBody = messages.joinToString("") { it.displayMessageBody }
+
+            Toast.makeText(context, "SMS from $sender: $messageBody", Toast.LENGTH_LONG).show()
+            Log.d("SmsReceiver", "SMS from $sender: $messageBody")
+
+            // Get Room database
+            val db = AppDatabase.getDatabase(context)
+            val contactDao = db.contactDao()
+            val messageDao = db.messageDao()
+
+            CoroutineScope(Dispatchers.IO).launch {
+
+                val normalizedSender = normalizePhoneNumber(sender)
+
+                // Find matching contact
+                val contacts = contactDao.getAllContacts().firstOrNull()
+                val contact = contacts?.firstOrNull {
+                    val normalizedContact = normalizePhoneNumber(it.phoneNumber)
+                    normalizedSender.endsWith(normalizedContact)
                 }
 
-                val sender = messages.firstOrNull()?.displayOriginatingAddress ?: return
-                val messageBody = messages.joinToString("") { it.displayMessageBody }
 
-                Toast.makeText(context, "SMS from $sender: $messageBody", Toast.LENGTH_LONG).show()
-                Log.d("SmsReceiver", "SMS from $sender: $messageBody")
-
-                try {
-                    val viewModel = ContactViewModel.ContactViewModelProvider.get()
-
-                    if (viewModel.lastSentMessage == messageBody) {
-                        Log.d("SmsReceiver", "Ignored duplicate message: $messageBody")
-                        return
-                    }
-
-                    val normalizedSender = normalizePhoneNumber(sender)
-
-                    val contact = viewModel.contacts.find {
-                        val normalizedContact = normalizePhoneNumber(it.phoneNumber)
-                        normalizedSender.endsWith(normalizedContact)
-                    }
-
-                    if (contact == null) {
-                        Toast.makeText(context, "No contact matched for $sender", Toast.LENGTH_LONG).show()
-                        Log.d("SmsReceiver", "No matching contact for normalized sender: $normalizedSender")
-                    } else {
-                        Toast.makeText(context, "Message matched to ${contact.name}", Toast.LENGTH_LONG).show()
-                        viewModel.addMessageToContact(
-                            context = context,
+                if (contact != null) {
+                    // Insert message in Room DB
+                    messageDao.insert(
+                        Message(
                             contactId = contact.id,
-                            messageContent = messageBody,
-                            senderId = contact.name
+                            senderId = contact.name,
+                            content = messageBody,
+                            timestamp = System.currentTimeMillis()
                         )
+                    )
+
+                    // Show notification on main thread
+                    withContext(Dispatchers.Main) {
+                        sendNotification(context, contact.name, messageBody)
                     }
-
-                    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    val channelId = "sms_channel"
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val channel = NotificationChannel(
-                            channelId,
-                            "SMS Notifications",
-                            NotificationManager.IMPORTANCE_HIGH
-                        ).apply {
-                            description = "Notifications for incoming SMS messages"
-                        }
-                        notificationManager.createNotificationChannel(channel)
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No contact matched for $sender", Toast.LENGTH_LONG).show()
                     }
-
-                    val notification = NotificationCompat.Builder(context, channelId)
-                        .setSmallIcon(android.R.drawable.ic_dialog_email)
-                        .setContentTitle("New message from ${contact?.name}")
-                        .setContentText(messageBody)
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setAutoCancel(true)
-                        .build()
-
-                    notificationManager.notify(System.currentTimeMillis().toInt(), notification)
-
-                } catch (e: Exception) {
-                    Toast.makeText(context, "ViewModel not available", Toast.LENGTH_LONG).show()
-                    Log.e("SmsReceiver", "ContactViewModel not available", e)
+                    Log.d("SmsReceiver", "No matching contact for sender: $sender")
                 }
             }
-        } catch (e: Exception) {
-            Toast.makeText(context, "SMS Receiver crashed", Toast.LENGTH_LONG).show()
-            Log.e("SmsReceiver", "Crash in onReceive", e)
         }
     }
 
-    // Helper to normalize phone numbers (remove +, spaces, dashes, etc.)
+    // Format phone number to digits only for matching
     private fun normalizePhoneNumber(number: String): String {
         return number.filter { it.isDigit() }
+    }
+
+    // Notification builder
+    private fun sendNotification(context: Context, title: String, content: String) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "sms_channel"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "SMS Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for incoming SMS messages"
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setContentTitle("New message from $title")
+            .setContentText(content)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(System.currentTimeMillis().toInt(), notification)
     }
 }

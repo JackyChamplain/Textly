@@ -1,46 +1,33 @@
 package com.example.messageapp
 
 import android.Manifest
-import android.content.Context
 import android.os.Build
+import android.os.Bundle
 import android.telephony.SmsManager
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.messageapp.utilities.Message
-import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,12 +35,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
 import com.example.messageapp.contact.ContactViewModel
-import com.example.messageapp.utilities.SettingsViewModel
+import com.example.messageapp.roomdb.AppDatabase
+import com.example.messageapp.roomdb.Contact
+import com.example.messageapp.roomdb.Message
 import com.example.messageapp.screens.AddContact
 import com.example.messageapp.screens.Home
 import com.example.messageapp.screens.Settings
 import com.example.messageapp.ui.theme.MessageAPPTheme
+import com.example.messageapp.utilities.SettingsViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,18 +55,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             MessageAPPTheme(dynamicColor = false, darkTheme = false) {
                 Surface(color = Color.White) {
-                    val settingsViewModel: SettingsViewModel = viewModel() // Create the ViewModel
-                    AppContent(settingsViewModel = settingsViewModel) // Pass it to AppContent
+                    val settingsViewModel: SettingsViewModel = viewModel()
+                    AppContent(settingsViewModel)
                 }
             }
         }
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewModel as a parameter
+fun AppContent(settingsViewModel: SettingsViewModel) {
     val navController = rememberNavController()
     val contactViewModel: ContactViewModel = viewModel()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -81,18 +73,13 @@ fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewMo
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
-            //Toast.makeText(LocalContext.current, "Notifications are disabled", Toast.LENGTH_SHORT).show()
-        }
-    }
+    ) { /* do nothing */ }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-
 
     ContactViewModel.ContactViewModelProvider.init(contactViewModel)
 
@@ -138,195 +125,200 @@ fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewMo
         ) { paddingValues ->
             Box(modifier = Modifier.padding(paddingValues)) {
                 NavHost(navController = navController, startDestination = "home") {
-                    composable("home") { Home(navController, contactViewModel, settingsViewModel = settingsViewModel) }
-                    composable("addcontact") { AddContact(navController, contactViewModel, settingsViewModel = settingsViewModel) }
-                    composable("settings") { Settings(navController = navController,settingsViewModel = settingsViewModel) }
+                    composable("home") {
+                        Home(navController, contactViewModel, settingsViewModel)
+                    }
+                    composable("addcontact") {
+                        AddContact(navController, contactViewModel, settingsViewModel)
+                    }
+                    composable("settings") {
+                        Settings(navController = navController, settingsViewModel = settingsViewModel)
+                    }
                     composable("chat/{contactId}") { backStackEntry ->
                         val contactId = backStackEntry.arguments?.getString("contactId") ?: ""
-                        val contact = contactViewModel.contacts.find { it.id == contactId }
+                        val context = LocalContext.current
+                        val db = remember { AppDatabase.getDatabase(context) }
 
-                        // Track if password has been entered
+                        var contact by remember { mutableStateOf<Contact?>(null) }
                         var isPasswordVerified by remember { mutableStateOf(false) }
 
-                        if (contact != null) {
-                            if (contact.hasPassword && !isPasswordVerified) {
-                                PasswordGate(contact = contact, onSuccess = {
+                        LaunchedEffect(contactId) {
+                            contact = db.contactDao().getContactById(contactId)
+                        }
+
+                        contact?.let {
+                            if (it.hasPassword && !isPasswordVerified) {
+                                PasswordGate(contactId = contactId) {
                                     isPasswordVerified = true
-                                })
+                                }
                             } else {
-                                ChatScreen(
-                                    contactId = contactId,
-                                    navController = navController,
-                                    contactViewModel = contactViewModel
-                                )
+                                ChatScreen(contact = it, navController = navController)
                             }
                         }
                     }
-
                 }
             }
         }
     }
 }
 
+@Composable
+fun PasswordGate(contactId: String, onSuccess: () -> Unit) {
+    val context = LocalContext.current
+    val db = remember { AppDatabase.getDatabase(context) }
+    var contact by remember { mutableStateOf<Contact?>(null) }
 
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    LaunchedEffect(contactId) {
+        contact = db.contactDao().getContactById(contactId)
+    }
+
+    contact?.let {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("Enter password for ${it.name}")
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = input,
+                onValueChange = {
+                    input = it
+                    error = false
+                },
+                label = { Text("Password") },
+                isError = error,
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = {
+                if (input == it.password) {
+                    onSuccess()
+                } else {
+                    error = true
+                }
+            }) {
+                Text("Enter")
+            }
+            if (error) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Incorrect password", color = Color.Red)
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(
-    contactId: String,
-    navController: NavController,
-    contactViewModel: ContactViewModel,
-) {
+fun ChatScreen(contact: Contact, navController: NavController) {
+    val context = LocalContext.current
+    val db = remember { AppDatabase.getDatabase(context) }
+    val messageDao = db.messageDao()
+
     var messageText by remember { mutableStateOf("") }
-    val context = LocalContext.current  // Correct usage of LocalContext
-    val contact = contactViewModel.contacts.find { it.id == contactId }
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredMessages = contact?.messages?.filter {
+    val messages by messageDao.getMessagesForContact(contact.id).collectAsState(initial = emptyList())
+    val filteredMessages = messages.filter {
         it.content.contains(searchQuery, ignoreCase = true)
-    } ?: emptyList()
+    }
 
-    // Launcher for requesting permission
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val smsPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) {
             Toast.makeText(context, "SMS permission denied", Toast.LENGTH_SHORT).show()
         }
     }
 
     LaunchedEffect(Unit) {
-        // Request permission to send SMS when the screen is displayed
-        launcher.launch(Manifest.permission.SEND_SMS)
+        smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
     }
 
-    // Handle sending SMS and adding the message
     fun sendMessage() {
-        if (messageText.isNotBlank() && contact != null) {
-            // Send SMS if permission granted
+        if (messageText.isNotBlank()) {
             try {
                 val smsManager = SmsManager.getDefault()
                 smsManager.sendTextMessage(contact.phoneNumber, null, messageText, null, null)
-                contactViewModel.addMessageToContact(context,contact.id, messageText) // Add to local contact messages list
-                messageText = "" // Reset message input field
+
+                CoroutineScope(Dispatchers.IO).launch {
+                    messageDao.insert(
+                        Message(
+                            contactId = contact.id,
+                            senderId = "You",
+                            content = messageText,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+                }
+                messageText = ""
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to send SMS", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    // UI Layout
     Column(modifier = Modifier.fillMaxSize()) {
-        if (contact != null) {
-            TopAppBar(
-                title = { Text("${contact.name} (${contact.phoneNumber})") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search messages...") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                singleLine = true
-            )
-
-
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp),
-                contentPadding = PaddingValues(8.dp)
-            ) {
-                items(filteredMessages) { message ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(Color.LightGray),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${message.senderId}: ",
-                            color = Color.Gray,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = message.content,
-                            modifier = Modifier.weight(1f).padding(8.dp)
-                        )
-                    }
+        TopAppBar(
+            title = { Text("${contact.name} (${contact.phoneNumber})") },
+            navigationIcon = {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                 }
             }
-
-            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                BasicTextField(
-                    value = messageText,
-                    onValueChange = { messageText = it },
-                    keyboardOptions = KeyboardOptions.Default.copy(
-                        imeAction = ImeAction.Send
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onSend = { sendMessage() }
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = { sendMessage() }) {
-                    Icon(Icons.Default.Send, contentDescription = "Send")
-                }
-            }
-        }
-    }
-}
-
-// Password Screen
-@Composable
-fun PasswordGate(contact: com.example.messageapp.contact.Contact, onSuccess: () -> Unit) {
-    var input by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Enter password for ${contact.name}")
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = input,
-            onValueChange = {
-                input = it
-                error = false
-            },
-            label = { Text("Password") },
-            isError = error,
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation()
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = {
-            if (input == contact.password) {
-                onSuccess()
-            } else {
-                error = true
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search messages...") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            singleLine = true
+        )
+
+        LazyColumn(
+            modifier = Modifier.weight(1f).padding(8.dp),
+            contentPadding = PaddingValues(8.dp)
+        ) {
+            items(filteredMessages) { message ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                        .background(Color.LightGray),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${message.senderId}: ",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = message.content,
+                        modifier = Modifier.weight(1f).padding(8.dp)
+                    )
+                }
             }
-        }) {
-            Text("Enter")
         }
-        if (error) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Incorrect password", color = Color.Red)
+
+        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = messageText,
+                onValueChange = { messageText = it },
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { sendMessage() }),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(onClick = { sendMessage() }) {
+                Icon(Icons.Default.Send, contentDescription = "Send")
+            }
         }
     }
 }

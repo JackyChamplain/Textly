@@ -11,9 +11,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.messageapp.contact.Contact
-import com.example.messageapp.contact.ContactGroup
 import com.example.messageapp.contact.ContactViewModel
+import com.example.messageapp.roomdb.Contact
+import com.example.messageapp.roomdb.ContactGroup
 import com.example.messageapp.utilities.SettingsViewModel
 
 @Composable
