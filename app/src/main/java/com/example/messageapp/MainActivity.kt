@@ -241,23 +241,25 @@ fun ChatScreen(contact: Contact, navController: NavController) {
 
     fun sendMessage() {
         if (messageText.isNotBlank()) {
+            val currentMessageContent = messageText
+
             try {
                 val smsManager = SmsManager.getDefault()
-                smsManager.sendTextMessage(contact.phoneNumber, null, messageText, null, null)
+                smsManager.sendTextMessage(contact.phoneNumber, null, currentMessageContent, null, null)
 
                 CoroutineScope(Dispatchers.IO).launch {
                     messageDao.insert(
                         Message(
                             contactId = contact.id,
                             senderId = "You",
-                            content = messageText,
+                            content = currentMessageContent,
                             timestamp = System.currentTimeMillis()
                         )
                     )
                 }
                 messageText = ""
             } catch (e: Exception) {
-                Toast.makeText(context, "Failed to send SMS", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Failed to send SMS: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
