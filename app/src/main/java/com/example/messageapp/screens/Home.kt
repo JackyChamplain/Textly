@@ -18,17 +18,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 
 @Composable
 fun Home(navController: NavController, contactViewModel: ContactViewModel, settingsViewModel: SettingsViewModel) {
     var selectedGroup by remember { mutableStateOf<ContactGroup?>(null) }
+    val context = LocalContext.current
 
     // Filtered contacts based on the selected group
-    val contactsToDisplay = remember(selectedGroup) {
-        if (selectedGroup == null) {
-            contactViewModel.contacts
-        } else {
-            contactViewModel.contacts.filter { it.group == selectedGroup }
+    val contactsToDisplay by remember {
+        derivedStateOf {
+            val filtered = if (selectedGroup == null) {
+                contactViewModel.contacts
+            } else {
+                contactViewModel.contacts.filter { it.group == selectedGroup }
+            }
+            filtered.sortedWith(compareByDescending<com.example.messageapp.contact.Contact> { it.isPinned }.thenBy { it.name })
         }
     }
 
@@ -83,8 +91,19 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp)
-                        .clickable { navController.navigate("chat/${contact.id}") },
+                        // Long press to pin chat/contact
+                        .combinedClickable(
+                            onClick = { navController.navigate("chat/${contact.id}") },
+                            onLongClick = {
+                                contact.isPinned = !contact.isPinned
+                                Toast.makeText(
+                                    context,
+                                    if (contact.isPinned) "Pinned chat with ${contact.name}" else "Unpinned chat",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                        .padding(8.dp),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
                 ) {
                     Row(
@@ -94,12 +113,19 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = "${contact.name} - ${contact.group}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                            fontSize = settingsViewModel.fontSize.floatValue.sp
-                        )
+                        Row(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${contact.name} - ${contact.group}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = settingsViewModel.fontSize.floatValue.sp,
+                                fontWeight = if (contact.isPinned) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (contact.isPinned) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("📌") // Pinned chats/contacts marked with pin emoji
+                            }
+                        }
+
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = { contactViewModel.removeContact(contact) }) {
                             Icon(Icons.Default.Delete, contentDescription = "Remove Contact")
