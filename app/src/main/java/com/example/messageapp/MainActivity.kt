@@ -146,6 +146,11 @@ fun ChatScreen(
     var messageText by remember { mutableStateOf("") }
     val context = LocalContext.current  // Correct usage of LocalContext
     val contact = contactViewModel.contacts.find { it.id == contactId }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredMessages = contact?.messages?.filter {
+        it.content.contains(searchQuery, ignoreCase = true)
+    } ?: emptyList()
 
     // Launcher for requesting permission
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -188,13 +193,25 @@ fun ChatScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search messages...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                singleLine = true
+            )
+
+
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
                     .padding(8.dp),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(contact.messages) { message ->
+                items(filteredMessages) { message ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
