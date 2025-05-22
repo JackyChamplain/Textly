@@ -2,6 +2,7 @@ package com.example.messageapp
 
 import android.Manifest
 import android.content.Context
+import android.os.Build
 import android.telephony.SmsManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,6 +78,21 @@ fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewMo
     val contactViewModel: ContactViewModel = viewModel()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            //Toast.makeText(LocalContext.current, "Notifications are disabled", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
 
     ContactViewModel.ContactViewModelProvider.init(contactViewModel)
 
