@@ -13,4 +13,14 @@ class Converters {
     fun toContactGroup(value: String): ContactGroup {
         return ContactGroup.valueOf(value)
     }
+
+    @TypeConverter
+    fun fromPriority(priority: Priority): String {
+        return priority.name
+    }
+
+    @TypeConverter
+    fun toPriority(value: String): Priority {
+        return Priority.valueOf(value)
+    }
 }

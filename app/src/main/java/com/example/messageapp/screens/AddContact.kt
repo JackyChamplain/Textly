@@ -14,6 +14,7 @@ import androidx.navigation.NavController
 import com.example.messageapp.contact.ContactViewModel
 import com.example.messageapp.roomdb.Contact
 import com.example.messageapp.roomdb.ContactGroup
+import com.example.messageapp.roomdb.Priority
 import com.example.messageapp.utilities.SettingsViewModel
 
 @Composable
@@ -24,7 +25,9 @@ fun AddContact(
 ) {
     var contactName by remember { mutableStateOf("") }
     var phoneNum by remember { mutableStateOf("") }
-    var selectedGroup by remember { mutableStateOf(ContactGroup.PERSONAL) } // Default selection
+    var selectedGroup by remember { mutableStateOf(ContactGroup.PERSONAL) }
+    val priorities = Priority.values()
+    var selectedPriority by remember { mutableStateOf(Priority.REGULAR) }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.White),
@@ -55,7 +58,6 @@ fun AddContact(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Group Selection
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -79,25 +81,47 @@ fun AddContact(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Save Contact Button
+            Text("Message Priority:", fontSize = settingsViewModel.fontSize.value.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                priorities.forEach { priority ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = selectedPriority == priority,
+                            onClick = { selectedPriority = priority }
+                        )
+                        Text(
+                            text = priority.name.lowercase().replaceFirstChar { it.uppercase() },
+                            fontSize = settingsViewModel.fontSize.value.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Button(onClick = {
                 if (contactName.isNotBlank() && phoneNum.isNotBlank()) {
                     val trimmedNumber = phoneNum.trim()
                     val isValid = trimmedNumber.matches(Regex("^\\+?[0-9]{10,15}$"))
 
                     if (isValid) {
-                        // Ensure number starts with "+"
                         val normalizedNumber = if (trimmedNumber.startsWith("+")) trimmedNumber else "+$trimmedNumber"
 
                         contactViewModel.addContact(
                             Contact(
                                 name = contactName,
                                 phoneNumber = normalizedNumber,
-                                group = selectedGroup
+                                group = selectedGroup,
+                                priority = selectedPriority
                             )
                         )
                         println("Phone number saved!")
-
                         navController.navigate("home")
                     } else {
                         println("Invalid phone number format")
@@ -107,8 +131,6 @@ fun AddContact(
                 Text("Save Contact", fontSize = settingsViewModel.fontSize.value.sp)
             }
 
-
-            // Cancel Button
             Button(onClick = { navController.navigate("home") }) {
                 Text("Cancel", fontSize = settingsViewModel.fontSize.value.sp)
             }

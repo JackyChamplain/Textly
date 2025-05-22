@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.example.messageapp.roomdb.AppDatabase
 import com.example.messageapp.roomdb.Message
+import com.example.messageapp.roomdb.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
@@ -37,25 +38,19 @@ class SmsReceiver : BroadcastReceiver() {
             Toast.makeText(context, "SMS from $sender: $messageBody", Toast.LENGTH_LONG).show()
             Log.d("SmsReceiver", "SMS from $sender: $messageBody")
 
-            // Get Room database
             val db = AppDatabase.getDatabase(context)
             val contactDao = db.contactDao()
             val messageDao = db.messageDao()
 
             CoroutineScope(Dispatchers.IO).launch {
-
                 val normalizedSender = normalizePhoneNumber(sender)
-
-                // Find matching contact
                 val contacts = contactDao.getAllContacts().firstOrNull()
                 val contact = contacts?.firstOrNull {
                     val normalizedContact = normalizePhoneNumber(it.phoneNumber)
                     normalizedSender.endsWith(normalizedContact)
                 }
 
-
                 if (contact != null) {
-                    // Insert message in Room DB
                     messageDao.insert(
                         Message(
                             contactId = contact.id,
@@ -65,10 +60,25 @@ class SmsReceiver : BroadcastReceiver() {
                         )
                     )
 
-                    // Show notification on main thread
-                    withContext(Dispatchers.Main) {
-                        sendNotification(context, contact.name, messageBody)
+                    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    val dndActive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+                    } else false
+
+                    val shouldNotify = when (contact.priority) {
+                        Priority.LOW -> false
+                        Priority.REGULAR -> !dndActive
+                        Priority.HIGH -> true
                     }
+
+                    if (shouldNotify) {
+                        withContext(Dispatchers.Main) {
+                            sendNotification(context, contact.name, messageBody)
+                        }
+                    } else {
+                        Log.d("SmsReceiver", "Notification suppressed due to priority: ${contact.priority}")
+                    }
+
                 } else {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "No contact matched for $sender", Toast.LENGTH_LONG).show()
@@ -79,12 +89,10 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // Format phone number to digits only for matching
     private fun normalizePhoneNumber(number: String): String {
         return number.filter { it.isDigit() }
     }
 
-    // Notification builder
     private fun sendNotification(context: Context, title: String, content: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "sms_channel"
