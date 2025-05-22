@@ -15,6 +15,9 @@ data class Contact(
     val messages: SnapshotStateList<Message> = mutableStateListOf()
 ) {
     var isPinned by mutableStateOf(false)
+    var hasPassword by mutableStateOf(false)
+    var password: String? by mutableStateOf(null)
+
 }
 
 enum class ContactGroup {

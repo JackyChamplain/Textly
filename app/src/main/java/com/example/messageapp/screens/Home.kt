@@ -22,6 +22,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import androidx.compose.material.icons.filled.Lock
+import com.example.messageapp.contact.Contact
 
 @Composable
 fun Home(navController: NavController, contactViewModel: ContactViewModel, settingsViewModel: SettingsViewModel) {
@@ -39,6 +41,9 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
             filtered.sortedWith(compareByDescending<com.example.messageapp.contact.Contact> { it.isPinned }.thenBy { it.name })
         }
     }
+
+    var showPasswordDialog by remember { mutableStateOf<Contact?>(null) }
+    var newPassword by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -127,6 +132,14 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))
+
+                        IconButton(onClick = {
+                            // Show dialog or inline TextField
+                            showPasswordDialog = contact // set the contact to lock
+                        }) {
+                            Icon(Icons.Default.Lock, contentDescription = "Set Password")
+                        }
+
                         IconButton(onClick = { contactViewModel.removeContact(contact) }) {
                             Icon(Icons.Default.Delete, contentDescription = "Remove Contact")
                         }
@@ -134,5 +147,39 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                 }
             }
         }
+        if (showPasswordDialog != null) {
+            AlertDialog(
+                onDismissRequest = { showPasswordDialog = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showPasswordDialog?.let {
+                            it.password = newPassword
+                            it.hasPassword = true
+                        }
+                        newPassword = ""
+                        showPasswordDialog = null
+                    }) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        newPassword = ""
+                        showPasswordDialog = null
+                    }) {
+                        Text("Cancel")
+                    }
+                },
+                title = { Text("Set Password for ${showPasswordDialog?.name}") },
+                text = {
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        placeholder = { Text("Enter password") }
+                    )
+                }
+            )
+        }
+
     }
 }

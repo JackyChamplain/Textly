@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -126,8 +127,26 @@ fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewMo
                     composable("settings") { Settings(navController = navController,settingsViewModel = settingsViewModel) }
                     composable("chat/{contactId}") { backStackEntry ->
                         val contactId = backStackEntry.arguments?.getString("contactId") ?: ""
-                        ChatScreen(contactId = contactId, navController = navController, contactViewModel = contactViewModel)
+                        val contact = contactViewModel.contacts.find { it.id == contactId }
+
+                        // Track if password has been entered
+                        var isPasswordVerified by remember { mutableStateOf(false) }
+
+                        if (contact != null) {
+                            if (contact.hasPassword && !isPasswordVerified) {
+                                PasswordGate(contact = contact, onSuccess = {
+                                    isPasswordVerified = true
+                                })
+                            } else {
+                                ChatScreen(
+                                    contactId = contactId,
+                                    navController = navController,
+                                    contactViewModel = contactViewModel
+                                )
+                            }
+                        }
                     }
+
                 }
             }
         }
@@ -249,6 +268,49 @@ fun ChatScreen(
                     Icon(Icons.Default.Send, contentDescription = "Send")
                 }
             }
+        }
+    }
+}
+
+// Password Screen
+@Composable
+fun PasswordGate(contact: com.example.messageapp.contact.Contact, onSuccess: () -> Unit) {
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Enter password for ${contact.name}")
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = input,
+            onValueChange = {
+                input = it
+                error = false
+            },
+            label = { Text("Password") },
+            isError = error,
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = {
+            if (input == contact.password) {
+                onSuccess()
+            } else {
+                error = true
+            }
+        }) {
+            Text("Enter")
+        }
+        if (error) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Incorrect password", color = Color.Red)
         }
     }
 }
