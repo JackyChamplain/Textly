@@ -8,6 +8,7 @@ import android.telephony.SmsManager
 import android.util.Log
 
 class ContactViewModel : ViewModel() {
+    var lastSentMessage: String? = null
     private val _contacts = mutableStateListOf<Contact>()
     val contacts: List<Contact> get() = _contacts
 
@@ -15,21 +16,27 @@ class ContactViewModel : ViewModel() {
         _contacts.add(contact)
     }
 
-    fun addMessageToContact(context: Context, contactId: String, messageContent: String, senderId: String = "you") {
+    fun addMessageToContact(context: Context, contactId: String, messageContent: String, senderId: String = "You") {
         val contact = contacts.find { it.id == contactId }
         if (contact != null) {
             try {
-                val smsManager = SmsManager.getDefault()
-                smsManager.sendTextMessage(contact.phoneNumber, null, messageContent, null, null)
+                if (senderId == "You") {
+                    val smsManager = SmsManager.getDefault()
+                    smsManager.sendTextMessage(contact.phoneNumber, null, messageContent, null, null)
+                    lastSentMessage = messageContent // Track sent message
+                    Log.d("ContactViewModel", "Sent SMS to ${contact.phoneNumber}")
+                }
+
+                // Add message locally
                 contact.messages.add(
                     Message(senderId = senderId, content = messageContent)
                 )
-                Log.d("SMS", "SMS sent to ${contact.phoneNumber}")
             } catch (e: Exception) {
                 Log.e("SMS", "Failed to send SMS", e)
             }
         }
     }
+
 
 
     fun removeContact(contact: Contact) {
@@ -53,4 +60,17 @@ class ContactViewModel : ViewModel() {
     fun getContactsByGroup(group: ContactGroup): List<Contact> {
         return _contacts.filter { it.group == group }
     }
+
+    object ContactViewModelProvider {
+        private var viewModel: ContactViewModel? = null
+
+        fun init(vm: ContactViewModel) {
+            viewModel = vm
+        }
+
+        fun get(): ContactViewModel {
+            return viewModel ?: throw IllegalStateException("ViewModel not initialized")
+        }
+    }
+
 }

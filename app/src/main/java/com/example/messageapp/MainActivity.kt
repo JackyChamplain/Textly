@@ -77,6 +77,8 @@ fun AppContent(settingsViewModel: SettingsViewModel) { // Receive SettingsViewMo
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    ContactViewModel.ContactViewModelProvider.init(contactViewModel)
+
     ModalNavigationDrawer(
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.background(Color.LightGray)) {
@@ -201,7 +203,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "You: ",
+                            text = "${message.senderId}: ",
                             color = Color.Gray,
                             style = MaterialTheme.typography.bodyMedium
                         )
