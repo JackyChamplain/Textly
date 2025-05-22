@@ -21,5 +21,10 @@ data class Message(
     val contactId: String,
     val senderId: String,
     val content: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isSent: Boolean = false,
+    val isDelivered: Boolean = false,
+    val sentAt: Long? = null,
+    val deliveredAt: Long? = null,
+    val isFailed: Boolean = false
 )

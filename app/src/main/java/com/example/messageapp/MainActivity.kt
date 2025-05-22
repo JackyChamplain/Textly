@@ -253,12 +253,28 @@ fun ChatScreen(contact: Contact, navController: NavController) {
                             contactId = contact.id,
                             senderId = "You",
                             content = currentMessageContent,
-                            timestamp = System.currentTimeMillis()
+                            timestamp = System.currentTimeMillis(),
+                            isSent = true,
+                            isDelivered = false,
+                            isFailed = false
                         )
                     )
                 }
                 messageText = ""
             } catch (e: Exception) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    messageDao.insert(
+                        Message(
+                            contactId = contact.id,
+                            senderId = "You",
+                            content = currentMessageContent,
+                            timestamp = System.currentTimeMillis(),
+                            isSent = false,
+                            isDelivered = false,
+                            isFailed = true
+                        )
+                    )
+                }
                 Toast.makeText(context, "Failed to send SMS: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
@@ -285,27 +301,13 @@ fun ChatScreen(contact: Contact, navController: NavController) {
         )
 
         LazyColumn(
-            modifier = Modifier.weight(1f).padding(8.dp),
+            modifier = Modifier
+                .weight(1f)
+                .padding(8.dp),
             contentPadding = PaddingValues(8.dp)
         ) {
             items(filteredMessages) { message ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
-                        .background(Color.LightGray),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${message.senderId}: ",
-                        color = Color.Gray,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = message.content,
-                        modifier = Modifier.weight(1f).padding(8.dp)
-                    )
-                }
+                MessageItem(message)
             }
         }
 
@@ -321,6 +323,37 @@ fun ChatScreen(contact: Contact, navController: NavController) {
             IconButton(onClick = { sendMessage() }) {
                 Icon(Icons.Default.Send, contentDescription = "Send")
             }
+        }
+    }
+}
+@Composable
+fun MessageItem(message: Message) {
+    val statusIcon = when {
+        message.isFailed -> "❌ Failed"
+        message.isDelivered -> "✅ Delivered"
+        message.isSent -> "📤 Sent"
+        else -> "🟡"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(Color(0xFFEFEFEF))
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = statusIcon,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Column {
+            Text(text = message.content)
+            Text(
+                text = "From: ${message.senderId}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
         }
     }
 }

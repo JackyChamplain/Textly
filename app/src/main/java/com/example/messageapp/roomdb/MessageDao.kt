@@ -17,4 +17,11 @@ interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE contactId = :contactId")
     fun getMessagesForContact(contactId: String): Flow<List<Message>>
+
+    @Query("UPDATE messages SET isSent = :isSent, sentAt = :sentAt WHERE id = :messageId")
+    suspend fun updateSentStatus(messageId: String, isSent: Boolean, sentAt: Long?)
+
+    @Query("UPDATE messages SET isDelivered = :isDelivered, deliveredAt = :deliveredAt WHERE id = :messageId")
+    suspend fun updateDeliveryStatus(messageId: String, isDelivered: Boolean, deliveredAt: Long?)
+
 }
