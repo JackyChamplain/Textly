@@ -14,14 +14,14 @@ import androidx.navigation.NavController
 import com.example.messageapp.contact.ContactViewModel
 import com.example.messageapp.utilities.SettingsViewModel
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.graphics.Color
 import com.example.messageapp.roomdb.Contact
 import com.example.messageapp.roomdb.ContactGroup
 
@@ -121,16 +121,36 @@ fun Home(navController: NavController, contactViewModel: ContactViewModel, setti
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(modifier = Modifier.weight(1f)) {
+                            // Moved emojis to the left of the name
+                            if (contact.isPinned) {
+                                Text("📌", modifier = Modifier.padding(end = 4.dp))
+                            }
+                            if (contact.isBlocked) {
+                                Text("🚫", modifier = Modifier.padding(end = 4.dp))
+                            }
                             Text(
                                 text = "${contact.name} - ${contact.group}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontSize = settingsViewModel.fontSize.value.sp,
                                 fontWeight = if (contact.isPinned) FontWeight.Bold else FontWeight.Normal
                             )
-                            if (contact.isPinned) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("📌") // Pinned chats/contacts marked with pin emoji
+                        }
+
+                        // Block/Unblock button
+                        IconButton(onClick = {
+                            if (contact.isBlocked) {
+                                contactViewModel.unblockContact(contact.id)
+                                Toast.makeText(context, "Contact unblocked", Toast.LENGTH_SHORT).show()
+                            } else {
+                                contactViewModel.blockContact(contact.id)
+                                Toast.makeText(context, "Contact blocked", Toast.LENGTH_SHORT).show()
                             }
+                        }) {
+                            Icon(
+                                if (contact.isBlocked) Icons.Default.Clear else Icons.Default.Check,
+                                contentDescription = if (contact.isBlocked) "Unblock" else "Block",
+                                tint = if (contact.isBlocked) Color.Red else Color.Gray
+                            )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = {

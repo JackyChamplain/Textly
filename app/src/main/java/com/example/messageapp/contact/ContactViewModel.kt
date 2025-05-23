@@ -141,6 +141,24 @@ class ContactViewModel : AndroidViewModel {
         }
     }
 
+    fun blockContact(contactId: String) {
+        viewModelScope.launch {
+            val contact = contactDao.getContactById(contactId)
+            contact?.let {
+                contactDao.insert(it.copy(isBlocked = true))
+            }
+        }
+    }
+
+    fun unblockContact(contactId: String) {
+        viewModelScope.launch {
+            val contact = contactDao.getContactById(contactId)
+            contact?.let {
+                contactDao.insert(it.copy(isBlocked = false))
+            }
+        }
+    }
+
     object ContactViewModelProvider {
         private var viewModel: ContactViewModel? = null
 

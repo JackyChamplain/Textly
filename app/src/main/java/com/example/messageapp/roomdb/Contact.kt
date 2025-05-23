@@ -17,6 +17,7 @@ data class Contact(
     var isPinned: Boolean = false,
     var hasPassword: Boolean = false,
     var password: String? = null,
-    var priority: Priority = Priority.REGULAR
+    var priority: Priority = Priority.REGULAR,
+    var isBlocked: Boolean = false
 )
 

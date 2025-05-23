@@ -18,7 +18,13 @@ val MIGRATION_1_2 = object : Migration(2, 3) {
     }
 }
 
-@Database(entities = [Contact::class, Message::class], version = 3)
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE contacts ADD COLUMN isBlocked INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+@Database(entities = [Contact::class, Message::class], version = 4)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao

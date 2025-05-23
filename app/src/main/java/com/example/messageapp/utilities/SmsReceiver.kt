@@ -51,6 +51,12 @@ class SmsReceiver : BroadcastReceiver() {
                 }
 
                 if (contact != null) {
+                    // Check if contact is blocked
+                    if (contact.isBlocked) {
+                        Log.d("SmsReceiver", "Message from blocked contact ${contact.name} ignored")
+                        return@launch
+                    }
+
                     messageDao.insert(
                         Message(
                             contactId = contact.id,
@@ -71,12 +77,14 @@ class SmsReceiver : BroadcastReceiver() {
                         Priority.HIGH -> true
                     }
 
-                    if (shouldNotify) {
-                        withContext(Dispatchers.Main) {
-                            sendNotification(context, contact.name, messageBody)
+                    if (!contact.isBlocked) {
+                        if (shouldNotify) {
+                            withContext(Dispatchers.Main) {
+                                sendNotification(context, contact.name, messageBody)
+                            }
+                        } else {
+                            Log.d("SmsReceiver", "Notification suppressed due to priority: ${contact.priority}")
                         }
-                    } else {
-                        Log.d("SmsReceiver", "Notification suppressed due to priority: ${contact.priority}")
                     }
 
                 } else {
