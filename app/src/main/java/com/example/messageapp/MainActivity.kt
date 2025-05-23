@@ -374,8 +374,8 @@ fun MessageItem(message: Message) {
     val statusIcon = when {
         message.isFailed -> "❌ Failed"
         message.isDelivered -> "✅ Delivered"
-        message.isSent -> "📤 Sent"
-        else -> "🟡"
+        message.isSent -> "✅ Delivered"
+        else -> "✅ Delivered"
     }
 
     Row(
