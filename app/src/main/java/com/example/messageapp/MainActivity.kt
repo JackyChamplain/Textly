@@ -1,6 +1,7 @@
 package com.example.messageapp
 
 import android.Manifest
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.telephony.SmsManager
@@ -12,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -73,7 +76,7 @@ fun AppContent(settingsViewModel: SettingsViewModel) {
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* do nothing */ }
+    ) { }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -235,6 +238,8 @@ fun ChatScreen(contact: Contact, navController: NavController) {
         }
     }
 
+    var messageToDelete by remember { mutableStateOf<Message?>(null) }
+
     LaunchedEffect(Unit) {
         smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
     }
@@ -280,6 +285,12 @@ fun ChatScreen(contact: Contact, navController: NavController) {
         }
     }
 
+    fun deleteMessage(message: Message) {
+        CoroutineScope(Dispatchers.IO).launch {
+            messageDao.delete(message)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("${contact.name} (${contact.phoneNumber})") },
@@ -307,7 +318,16 @@ fun ChatScreen(contact: Contact, navController: NavController) {
             contentPadding = PaddingValues(8.dp)
         ) {
             items(filteredMessages) { message ->
-                MessageItem(message)
+                // Long click to trigger delete confirmation
+                Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { messageToDelete = message }
+                    )
+                ) {
+                    MessageItem(message)
+                }
             }
         }
 
@@ -324,8 +344,31 @@ fun ChatScreen(contact: Contact, navController: NavController) {
                 Icon(Icons.Default.Send, contentDescription = "Send")
             }
         }
+
+        // Confirmation dialog for deleting a message
+        if (messageToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { messageToDelete = null },
+                title = { Text("Delete Message") },
+                text = { Text("Are you sure you want to delete this message?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        messageToDelete?.let { deleteMessage(it) }
+                        messageToDelete = null
+                    }) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { messageToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 }
+
 @Composable
 fun MessageItem(message: Message) {
     val statusIcon = when {
@@ -357,3 +400,15 @@ fun MessageItem(message: Message) {
         }
     }
 }
+
+@Composable
+fun MyScreen() {
+    val configuration = LocalConfiguration.current
+    when (configuration.orientation) {
+        Configuration.ORIENTATION_LANDSCAPE -> {
+        }
+        Configuration.ORIENTATION_PORTRAIT -> {
+        }
+    }
+}
+
